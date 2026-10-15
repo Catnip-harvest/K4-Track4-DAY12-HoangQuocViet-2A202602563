@@ -50,4 +50,15 @@ def dagger_windows(planner, logs, idx, expert=None):
     #   (hist_rel, v, gap, lead_v) của các hàng còn đang lái: np.concatenate theo từng thành phần. (3) X =
     #   features('perc', hist_rel, v, gap, lead_v). (4) Y = idm_forecast(expert, v, gap, lead_v): nhãn là
     #   việc luật IDM sẽ làm Ở CHÍNH các trạng thái đó. Trả (X, Y).
-    raise NotImplementedError("TODO dagger_windows: xem GUIDE.md, Bước 7")
+    from . import sim                                  # imported here: sim and this module are only needed together
+    from .planners import idm_forecast
+
+    expert = expert or IDM()                           # same default as cutin_windows: the rule the planner imitates
+    visited = []
+    sim.rollout_logs(planner, logs, idx, record=visited)
+    if not visited:                                    # nobody was still driving: keep the training layout, zero rows
+        return np.zeros((0, C.H + 4), np.float32), np.zeros((0, C.F), np.float32)
+    hist_rel, v, gap, lead_v = (np.concatenate(part, axis=0) for part in zip(*visited))
+    X = features("perc", hist_rel, v, gap, lead_v)
+    Y = idm_forecast(expert, v, gap, lead_v)           # the label is what the expert would do FROM the state the planner reached
+    return X, Y
